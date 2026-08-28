@@ -18,9 +18,14 @@ import { createElement as h, useState, useEffect, useRef, useCallback } from 're
 
 /* ───────────────────────── 共享 bus（入口 ↔ 面板 ↔ 自动探测） ───────────────────────── */
 
+/** 收起哨兵：确保 dismissedTask 永远不等于任何任务文本（关闭后绝不自动弹出）。 */
+const DISMISS_SENTINEL = '\u0000dismissed'
+
 const bus = {
   open: false,
-  sessionId: '',
+  sessionId: '',      // 群聊绑定的发起会话；面板仅在该会话活跃时显示
+  dismissedTask: '',  // 用户点击 × 收起时的任务；新任务（不同文本）才允许自动弹出
+  lastTask: '',       // 最近一次快照的任务文本（收起时取用）
   listeners: new Set(),
 }
 
@@ -35,11 +40,14 @@ function dispatchBus() {
 
 function openPanel(sessionId) {
   if (sessionId) bus.sessionId = sessionId
+  bus.dismissedTask = '' // 手动打开/探测打开均允许再次自动弹出
   bus.open = true
   dispatchBus()
 }
 
 function closePanel() {
+  // 以最近一次快照的任务为"收起标记"；无快照用哨兵（绝不等于任何任务文本）
+  bus.dismissedTask = bus.lastTask || DISMISS_SENTINEL
   bus.open = false
   dispatchBus()
 }
@@ -181,9 +189,6 @@ const PHASE_LABEL = {
 /* ───────────────────────── 入口按钮 ───────────────────────── */
 
 function HeaderAction({ sessionId }) {
-  useEffect(() => {
-    if (sessionId) bus.sessionId = sessionId
-  }, [sessionId])
   return h('button', {
     className: 'dshgc-trigger',
     title: '多角色群聊：基于会话发起群聊（也可用 /group-chat <任务> 指令呼起）',
@@ -224,6 +229,7 @@ function Panel() {
         if (snapNow.version !== last) {
           last = snapNow.version
           setSnap(snapNow)
+          if (typeof snapNow.task === 'string') bus.lastTask = snapNow.task
         }
       } catch {
         if (alive) setOffline(true)
@@ -311,7 +317,11 @@ function Panel() {
           title: showSettings ? '收起设置' : '任务与角色设置',
           onClick: () => setShowSettings((v) => !v),
         }, showSettings ? '▾' : '⚙'),
-        h('button', { className: 'dshgc-iconbtn dshgc-close', onClick: closePanel, title: '收起面板' }, '×'),
+        h('button', {
+          className: 'dshgc-iconbtn dshgc-close',
+          onClick: () => closePanel(),
+          title: '收起面板（群聊在后台继续，完成后结论仍会回到会话）',
+        }, '×'),
       ),
 
       showSettings
@@ -464,33 +474,42 @@ function roleName(snap, roleId) {
 
 /* ───────────────────────── 注册与自动探测 ───────────────────────── */
 
-function OverlayHost() {
+function OverlayHost({ useSessions }) {
   const [tick, setTick] = useState(0)
   useEffect(() => subscribeBus(() => setTick((n) => n + 1)), [])
 
-  // 后台探测：面板关闭时低频轮询；检测到活动（指令呼起 / 引擎被操作）→ 自动打开面板
+  // 当前活跃会话（SessionListState.current）
+  const currentSession = typeof useSessions === 'function'
+    ? useSessions((s) => (s ? s.current : undefined))
+    : undefined
+
+  // 后台探测：面板关闭时低频轮询；检测到新群聊活动（未收起的新任务、且属于当前浏览
+  // 的会话）→ 自动打开面板。用户点 × 收起后，同一任务绝不自动弹出。
   useEffect(() => {
+    if (!currentSession) return
     let alive = true
-    let seenVersion = 0
-    const tick = async () => {
+    const probe = async () => {
       if (bus.open) return
       try {
         const s = await fetchState()
         if (!alive || bus.open) return
-        if (s.phase === 'discussing' || s.phase === 'generating-roles' || s.phase === 'summarizing') {
-          openPanel(bus.sessionId)
-        }
+        const active = s.phase === 'discussing' || s.phase === 'generating-roles' || s.phase === 'summarizing'
+        if (!active) return
+        if (s.task === bus.dismissedTask) return // 用户已收起同一任务：静默后台跑
+        if (bus.sessionId !== '' && bus.sessionId !== currentSession) return // 群聊属于其它会话
+        openPanel(currentSession)
       } catch { /* host 不可达：静默 */ }
     }
-    tick()
-    const timer = setInterval(tick, 2000)
+    probe()
+    const timer = setInterval(probe, 2000)
     return () => { alive = false; clearInterval(timer) }
-  }, [])
+  }, [currentSession])
 
   void tick
+  // 会话绑定：面板只属于发起会话（bus.sessionId）；切走即不显示，切回恢复。
+  // 用户未绑定（从未打开/命令触发）时以当前会话为准。
   if (!bus.open) return null
-  // 必须以元素形式渲染 Panel（组件自带 hooks）：直接调用 Panel() 会把其 hooks
-  // 计入 OverlayHost，bus.open 切换时 hooks 数量跳变 → React #310 崩溃。
+  if (bus.sessionId !== '' && currentSession !== bus.sessionId) return null
   return h(Panel, null)
 }
 
