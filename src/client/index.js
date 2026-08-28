@@ -389,7 +389,9 @@ function Panel() {
 
         inDiscuss
           ? h('div', { className: 'dshgc-section' }, controls)
-          : null,
+          : (phase === 'idle' || phase === 'done' || phase === 'error') && (roles.length > 0 || messages.length > 0)
+            ? h('div', { className: 'dshgc-section' }, controls)
+            : null,
 
         snap && snap.error
           ? h('div', { className: 'dshgc-error' }, '⚠ ' + snap.error)
@@ -418,10 +420,6 @@ function Panel() {
                 ? h('div', { className: 'dshgc-path' }, '已保存：' + snap.mdPath)
                 : null,
             )
-          : null,
-
-        (phase === 'idle' || phase === 'done' || phase === 'error') && messages.length > 0 && !snap.summary
-          ? h('div', { className: 'dshgc-section' }, controls)
           : null,
       ),
     ),
