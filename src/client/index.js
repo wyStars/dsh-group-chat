@@ -449,7 +449,9 @@ function OverlayHost() {
   useEffect(() => subscribeBus(() => setTick((n) => n + 1)), [])
   void tick
   if (!bus.open) return null
-  return Panel()
+  // 必须以元素形式渲染 Panel（组件自带 hooks）：直接调用 Panel() 会把其 hooks
+  // 计入 OverlayHost，bus.open 切换时 hooks 数量跳变 → React #310 崩溃。
+  return h(Panel, null)
 }
 
 export const inject = ['slots']
