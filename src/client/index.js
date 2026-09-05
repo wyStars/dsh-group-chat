@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-group-chat — client 群聊面板 v2。
+ * @stars-w/dsh-group-chat — client 群聊面板 v2。
  *
  * 交互形态（基于会话的群聊，不隔离会话）：
  *  - 指令呼起：主会话输入 /group-chat <任务>（host 命令）→ 引擎建团并自动讨论，
@@ -227,7 +227,7 @@ function adoptStyles() {
   if (document.getElementById(STYLE_ID) !== null) return
   const style = document.createElement('style')
   style.id = STYLE_ID
-  style.dataset.plugin = '@dsh-external/dsh-group-chat'
+  style.dataset.plugin = '@stars-w/dsh-group-chat'
   style.textContent = CSS
   document.head.appendChild(style)
 }
@@ -851,12 +851,12 @@ export function apply(ctx) {
       id: 'dsh-group-chat-open',
       order: 30,
     }, HeaderAction),
-  ), '@dsh-external/dsh-group-chat: header action')
+  ), '@stars-w/dsh-group-chat: header action')
   ctx.effect(() => ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register({
       name: 'shell.overlay',
       id: 'dsh-group-chat-panel',
       order: 90,
     }, OverlayHost),
-  ), '@dsh-external/dsh-group-chat: overlay panel')
+  ), '@stars-w/dsh-group-chat: overlay panel')
 }
