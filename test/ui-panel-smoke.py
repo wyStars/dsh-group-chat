@@ -80,6 +80,21 @@ with sync_playwright() as p:
     if panel.count() > 0:
         print("panel text head:", panel.first.inner_text()[:200].replace("\n", " | "))
 
+    # 收起 → 左上方悬浮按钮（状态样式）
+    close = page.locator("button.dshgc-close")
+    if close.count():
+        close.first.click(timeout=5000)
+        page.wait_for_timeout(1200)
+        fl = page.locator("button.dshgc-float")
+        print("float button count (expect 1):", fl.count())
+        if fl.count():
+            print("float class:", fl.first.get_attribute("class"))
+            print("float bbox:", fl.first.bounding_box())
+            if fl.first.bounding_box() is None:
+                print("FAIL: float not visible")
+        else:
+            print("FAIL: float button missing")
+
     # 设置区：无轮数输入 + 有深度推理开关
     cfg = page.locator("button[title*='设置']")
     if cfg.count():
