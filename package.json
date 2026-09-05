@@ -22,7 +22,8 @@
   },
   "scripts": {
     "build": "bash scripts/build.sh",
-    "build:client": "tsdown"
+    "build:client": "tsdown",
+    "test": "node --test test/host/"
   },
   "exports": {
     ".": "./lib/index.js",

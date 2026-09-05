@@ -1,7 +1,7 @@
 # dsh-group-chat 主持人驱动讨论 + 成员 Subagent 深度推理 设计文档
 
 > 日期：2026-09-05
-> 状态：草案（待用户审查）
+> 状态：已批准（实施中；实现注记见文末）
 > 关联旧设计：`docs/specs/2026-08-28-dsh-group-chat-design.md`
 > 目标：彻底替换“固定轮数 + 全员轮流发言”，改为 AI 主持人动态调度；成员可自主判断是否调用 subagent 做深度推理。
 
@@ -406,3 +406,14 @@ duty: 主持讨论、点名追问、判断何时进入总结
 1. `ctx.subagents.startContinuable` 完成时是否会自动向主会话推送完成通知；若会，需要静默/抑制，避免主对话被内部推理结果打扰。
 2. 子代理能否携带自定义 `maxTokens` / 模型路由；不能时需要在 prompt 中约束输出长度，或在整理阶段截断。
 3. `pause` 在 subagent 运行中的具体交互是否可接受“不立即中断”这一语义。
+
+---
+
+## 14. 实现注记（2026-09-05 实施时记录）
+
+1. **开放项 1 结论 → 改用 one-shot，不用 startContinuable**。`SubagentContinuationManager.notifySettlement` 在子代理 settle 后**无条件**向 parent 会话注入 `subagent-settled` notice 并 `followup/steer` 唤醒父 agent（源码 `dsh-subagent/lib/index.js:notifySettlement`，`announced` 在初始/任意 submit 后置位），且无参数可关闭。因此深推理不采用设计文档 §6.3 建议的 `startContinuable + subagent/end 事件`（该事件按 parent scope 派发，host 级插件也收不到），改为：
+   `ctx.subagents.start('spawn', { parent, prompt, maxDepth: 1, agentOptions?, signal })` → `await run.result` 直接获得 `{ output, stopReason }`；one-shot 不产生任何父会话通知（真实环境已验证：父会话 JSONL 零渗入）；自建 AbortController 同时服务超时 180s / skip / stop / reroll / 50 秒竞速保护（provider 不 settle 也可中断）。
+2. **开放项 2 结论**：spawn provider（`subagent-spawn-in-process`）capabilities 全支持——`agentOptions`（provider/model 覆盖）、`depthLimit`（maxDepth 1）、`toolFilter`、`persona`、`outputSchema`。实现中以 `resolveRoute` 结果作为 `agentOptions`（子代理与主会话同 route）。
+3. **开放项 3 结论**：接受“不立即中断”语义——门闩仅检查于动作边界（主持人不调用 deep）；deep 运行中 pause 有效但 subagent 继续，当前动作完成后在下一步调度前暂停。
+4. **snapshot 最小扩展**：新增 `moderatorBusy: boolean`（设计 §8.1 未列，但 §9.3 要求区分“主持人正在调度”，客户端据此渲染状态提示）。
+
