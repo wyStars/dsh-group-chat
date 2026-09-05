@@ -132,3 +132,31 @@ test('导出 md: 团队区含主持人（先于专家）+ 讨论过程含主持�
   assert.ok(hostHeader !== -1 && expertHeader !== -1 && hostHeader < expertHeader)
   assert.ok(md.includes('**主持人：**') || md.includes('**主持人**')) // 讨论过程含主持人消息名
 })
+
+test('历史预算超限：截断最旧、保留最近（_buildHistory 方向）', async () => {
+  const { engine } = await setup()
+  // 60 条 × 502 字 ≈ 30k 字符 > 24k 预算：最旧部分被截掉，最近部分保留
+  engine.messages = Array.from({ length: 60 }, (_, i) => ({
+    id: String(i), roleId: 'r1', name: 'A' + i,
+    text: '长'.repeat(500), at: i, failed: false,
+  }))
+  const history = engine._buildHistory(engine.messages)
+  // 1) 时间顺序保持：保留的段内旧→新（用靠后的编号，确保在保留窗口内）
+  const i20 = history.indexOf('A20:')
+  const i30 = history.indexOf('A30:')
+  assert.ok(i20 !== -1 && i30 !== -1 && i20 < i30, '保留段落内应保持时间顺序（A20 在 A30 前）')
+  // 2) 截断了最旧部分（A0 消失）
+  assert.ok(!history.includes('A0:'), '最旧消息应被截断')
+  // 3) 最新消息必然保留
+  assert.ok(history.includes('A59:'), '最新消息必须保留')
+})
+
+test('exportMd 成功不清 error（掩盖真实错误）', async () => {
+  const { engine } = await setup()
+  engine.error = '讨论出错：保留的错误'
+  // 直接构造可导出内容并调用
+  engine.messages.push({ id: 'x1', roleId: 'r1', name: 'A', text: '内容', at: 1, failed: false })
+  const res = await engine.exportMd()
+  assert.equal(res.error, '') // 导出自身无错误
+  assert.equal(engine.error, '讨论出错：保留的错误') // 讨论错误不被清空
+})
