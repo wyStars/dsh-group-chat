@@ -92,6 +92,25 @@ test('chat: 讨论中只追加用户消息，不打断当前动作', async () =>
   assert.equal(engine.phase, 'done')
 })
 
+test('chat: 用户插话后，被点名成员的发言 prompt 优先回应用户消息', async () => {
+  const llm = makeLlm(defaultHandlers({
+    'dsh-group-chat-moderator-step': stepScript([
+      JSON.stringify({ action: 'speak', speakTo: 'r1' }),
+      JSON.stringify({ action: 'summarize' }),
+    ]),
+    'dsh-group-chat-member-plan': JSON.stringify({ mode: 'direct' }),
+  }))
+  const engine = makeEngine({ llm, subagents: makeSubagents() })
+  await engine.generateRoles('设计一款家庭记账 App')
+  engine.start()
+  engine.chat('请产品专家重点评估成本') // 最后一条 = 用户消息
+  await waitIdle(engine)
+  const speakCall = llm.calls.find((c) => c.purpose === 'dsh-group-chat-speak')
+  assert.ok(speakCall, '应有成员发言调用')
+  assert.match(speakCall.userText, /respond to the user's message FIRST/)
+  assert.match(speakCall.userText, /请产品专家重点评估成本/)
+})
+
 test('stop: 讨论中 abort 当前动作，phase=done 保留历史', async () => {
   const { engine } = await setup()
   engine.start()

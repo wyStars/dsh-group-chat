@@ -23,7 +23,7 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "build:client": "tsdown",
-    "test": "node --test test/host/"
+    "test": "node --test \"test/host/*.test.mjs\""
   },
   "exports": {
     ".": "./lib/index.js",

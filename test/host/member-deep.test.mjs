@@ -30,6 +30,7 @@ test('member plan: deep + subagent 成功 → start 受调, 素材进入整理�
   assert.equal(subagents.started[0].name, 'spawn')
   const req = subagents.started[0].request
   assert.equal(req.maxDepth, 1)
+  assert.deepEqual(req.toolFilter, { allow: [] }) // 纯推理：子代理零工具（设计 §12）
   assert.equal(req.agentOptions.provider, 'mock')
   const prompt = req.prompt[0].text
   assert.match(prompt, /落地成本、风险和可替代方案/)
@@ -172,4 +173,14 @@ test('deep 中 stop → abort subagent, phase=done 无残留状态', async () =>
   assert.equal(engine.phase, 'done')
   assert.equal(engine.deepThinkingRoleId, null)
   assert.equal(engine.streamingRoleId, null)
+})
+
+test('deep 超时（GC_DEEP_TIMEOUT_MS=100）→ 回退 direct（独立子进程）', async () => {
+  const { spawnSync } = await import('node:child_process')
+  const res = spawnSync(process.execPath, ['--test', 'deep-timeout.case.mjs'], {
+    cwd: new URL('.', import.meta.url).pathname,
+    env: { ...process.env, GC_DEEP_TIMEOUT_MS: '100' },
+    encoding: 'utf8',
+  })
+  assert.equal(res.status, 0, res.stdout + res.stderr)
 })
