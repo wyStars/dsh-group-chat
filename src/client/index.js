@@ -830,9 +830,18 @@ function OverlayHost({ useSessions }) {
   }, [currentSession, bus.open])
 
   void tick
-  // 收起态：左上方悬浮按钮（不遮挡主会话内容，状态样式可区分）
+  // 收起态：仅当群聊上下文存在且属于当前会话时显示左上方悬浮按钮
   if (!bus.open) {
-    if (bus.sessionId !== '' && currentSession !== bus.sessionId) return null
+    if (bus.sessionId !== '') {
+      // 已绑定过群聊会话：只在那个会话显示
+      if (currentSession !== bus.sessionId) return null
+    } else {
+      // 未绑定：仅当引擎有群聊上下文（活动/任务），且任务归属于当前会话
+      const s = closedSnap
+      const hasContext = Boolean(s && (s.phase !== 'idle' || (s.task && s.task !== '')))
+      if (!hasContext) return null // 新会话/空闲：不显示悬浮按钮
+      if (s && s.sessionId !== '' && s.sessionId !== currentSession) return null // 任务属于其它会话
+    }
     return h(FloatingButton, { currentSession, snap: closedSnap })
   }
   // 会话绑定：面板只属于发起会话（bus.sessionId）；切走即不显示，切回恢复。
