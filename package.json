@@ -1,6 +1,6 @@
 {
   "name": "@stars-w/dsh-group-chat",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "AI 主持人驱动的多角色群聊插件（DSH Host）：自动生成主持人 + 3~6 专家团队、动态调度讨论、成员 subagent 深度推理、总结结论并导出 md 到工作区",
   "type": "module",
   "main": "./lib/index.js",
