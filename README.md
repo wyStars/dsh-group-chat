@@ -26,19 +26,23 @@
 
 DSH 插件的安装走 **profile 目录的 pnpm**（`dsh plugin` 把剩余参数原样转发给 pnpm），包本身来自 npm 仓库：
 
+> **注意参数顺序**：`--profile <name>` 必须紧跟 `plugin` 子命令（`dsh --profile web plugin …` 会被命令解析器报 `required option '--profile <name>' not specified`）。
+
 ```bash
 # 安装到 web profile（等价于在 profile 目录执行 pnpm add）
-dsh --profile web plugin add @stars-w/dsh-group-chat
+dsh plugin --profile web add @stars-w/dsh-group-chat
 
 # 指定其它 profile（如 tui / headless）
-dsh --profile tui plugin add @stars-w/dsh-group-chat
+dsh plugin --profile tui add @stars-w/dsh-group-chat
 ```
 
 ```bash
 # 卸载 / 查看依赖树
-dsh --profile web plugin remove @stars-w/dsh-group-chat
-dsh --profile web plugin why @stars-w/dsh-group-chat
+dsh plugin --profile web remove @stars-w/dsh-group-chat
+dsh plugin --profile web why @stars-w/dsh-group-chat
 ```
+
+> **PowerShell（Windows 宿主）**：包名建议加引号——`dsh plugin --profile web add "@stars-w/dsh-group-chat"`（避免 `@` 被解释）。
 
 重启 profile 后插件自动装配生效（DSH 会加载已安装依赖中的外部插件；会话头部出现「💬 群聊」、可用 `/group-chat <任务>` 即可确认）。需要显式指定装配顺序/清单时，把包名加入 profile 的 `dsh.profile.bundles` 列表，或在 DSH 插件市场（**设置 → 插件市场**）一键安装。
 

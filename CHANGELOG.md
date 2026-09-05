@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.5] - 2026-09-05
+
+- 修正安装命令参数顺序：`--profile <name>` 必须紧跟 `plugin` 子命令
+  （`dsh plugin --profile web add …`；旧写 `dsh --profile web plugin …` 报
+  `required option '--profile <name>' not specified`），并补充 PowerShell 引号提示
+
 ## [0.0.4] - 2026-09-05
 
 - 安装文档改为 DSH 插件命令形态（`dsh --profile web plugin add @stars-w/dsh-group-chat`，
