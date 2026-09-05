@@ -255,8 +255,14 @@ function mdInline(text, keyPrefix) {
     else if (tok.startsWith('`')) out.push(h('code', { key }, tok.slice(1, -1)))
     else if (tok.startsWith('[')) {
       const mm = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(tok)
-      if (mm) out.push(h('a', { key, href: mm[2], target: '_blank', rel: 'noreferrer' }, mm[1]))
-      else out.push(tok)
+      if (mm) {
+        // 协议白名单：仅 http/https/mailto（LLM 文本视为不可信数据，防 javascript: 等）
+        const href = mm[2].trim()
+        const safe = /^(https?:|mailto:)/i.test(href)
+        out.push(safe
+          ? h('a', { key, href, target: '_blank', rel: 'noreferrer' }, mm[1])
+          : mm[1])
+      } else out.push(tok)
     } else if (tok.startsWith('*')) out.push(h('em', { key }, tok.slice(1, -1)))
     else if (tok.startsWith('~~')) out.push(h('del', { key }, tok.slice(2, -2)))
     last = m.index + tok.length
@@ -411,7 +417,8 @@ function Panel() {
     const vh = window.innerHeight
     return {
       x: Math.max(4, Math.min(Math.round(x), vw - 396)),
-      y: Math.max(4, Math.min(Math.round(y), vh - 100)),
+      // 底部留出面板最小高度空间（面板高度 = min(640, vh - y - 16)，最小 200）
+      y: Math.max(4, Math.min(Math.round(y), vh - 220)),
     }
   }
   const onDragMove = (e) => {
@@ -426,6 +433,7 @@ function Panel() {
     if (h) {
       window.removeEventListener('pointermove', h.move)
       window.removeEventListener('pointerup', h.end)
+      window.removeEventListener('blur', h.end)
     }
     savePanelPos(posRef.current)
   }
@@ -435,6 +443,7 @@ function Panel() {
     if (h) {
       window.removeEventListener('pointermove', h.move)
       window.removeEventListener('pointerup', h.end)
+      window.removeEventListener('blur', h.end)
     }
     dragRef.current = null
   }, [])
@@ -448,6 +457,7 @@ function Panel() {
     if (h) {
       window.addEventListener('pointermove', h.move)
       window.addEventListener('pointerup', h.end)
+      window.addEventListener('blur', h.end)
     }
   }
 
@@ -510,6 +520,17 @@ function Panel() {
     void run(() => postAction('chat', { text }), '')
   }, [compose, run])
 
+  // md 渲染缓存：流式期间仅重解析变化的文本（消息 id 稳定），避免每 chunk 全量重渲染
+  const mdCacheRef = useRef(new Map())
+  const renderMsg = (m) => {
+    let cached = mdCacheRef.current.get(m.id)
+    if (!cached || cached.text !== m.text) {
+      cached = { text: m.text, node: m.failed === true ? [m.text] : mdToReact(m.text) }
+      mdCacheRef.current.set(m.id, cached)
+    }
+    return cached.node
+  }
+
   const canGenerate = phase !== 'discussing' && phase !== 'generating-roles' && phase !== 'summarizing'
   const inDiscuss = phase === 'discussing'
   const paused = inDiscuss && snap && snap.paused === true
@@ -547,7 +568,7 @@ function Panel() {
         top: pos.y,
         right: 'auto',
         bottom: 'auto',
-        height: Math.max(320, Math.min(640, window.innerHeight - pos.y - 16)),
+        height: Math.max(200, Math.min(640, window.innerHeight - pos.y - 16)),
       }
     : undefined
 
@@ -680,7 +701,7 @@ function Panel() {
           h('div', { className: 'dshgc-msgBody' },
             h('div', { className: 'dshgc-msgName' }, m.name + (m.roleId === 'host' ? ' · 主持' : '')),
             h('div', { className: 'dshgc-msgText', 'data-failed': String(m.failed === true) },
-              m.failed === true ? [m.text] : mdToReact(m.text)),
+              renderMsg(m)),
           ),
         )),
         inDiscuss && snap && snap.deepThinkingRoleId
