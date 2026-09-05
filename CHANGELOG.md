@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.4] - 2026-09-05
+
+- 安装文档改为 DSH 插件命令形态（`dsh --profile web plugin add @stars-w/dsh-group-chat`，
+  底层为 profile 目录 pnpm 转发到 npm 仓库），补充市场一键安装/卸载/依赖树说明
+
 ## [0.0.3] - 2026-09-05
 
 - 修复 README 被打包占位版本覆盖的问题（GitCode 初始提交冲突时误用占位文件），

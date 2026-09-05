@@ -22,18 +22,27 @@
 | 导出 MD | 任务 + 主持人 + 团队 + 完整讨论纪要 + 结论 → 写入工作区 `group-chat-<slug>-<时间戳>.md` |
 | 自动呼起 | 面板关闭时后台 2s 轻轮询：检测到群聊活动（指令/命令触发）自动打开面板 |
 
-## 安装
+## 安装（DSH 插件命令）
 
-本插件是 **DeepSeek Harness（DSH）** 宿主插件（host 编排引擎 + 浏览器面板），作为 Bundle 插件注入/装配：
+DSH 插件的安装走 **profile 目录的 pnpm**（`dsh plugin` 把剩余参数原样转发给 pnpm），包本身来自 npm 仓库：
 
 ```bash
-# 从 npm 安装（发布包含 lib/ 运行产物 + README + LICENSE + CHANGELOG）
-npm install @stars-w/dsh-group-chat
+# 安装到 web profile（等价于在 profile 目录执行 pnpm add）
+dsh --profile web plugin add @stars-w/dsh-group-chat
+
+# 指定其它 profile（如 tui / headless）
+dsh --profile tui plugin add @stars-w/dsh-group-chat
 ```
 
-- **peer 依赖**（由 DSH 宿主运行时提供）：`@deepseek-ai/dsh-llm`、`@deepseek-ai/dsh-tools`、`cordis`（≥4.0.0-rc）、`schemastery`、`@deepseek-ai/dsh-client-ui-slots`
-- **DSH 装配**：在 DSH 的 `cordis.yml`（`include` 装配）或注入器（`dev_inject_plugin`）中加载本包；插件提供 `/group-chat` 命令、Web 面板与 `/dsh-group-chat/api/*` HTTP 路由。
-- **源码开发**：`git clone` 后 `npm install && npm run build`（构建依赖注入器工具链，见 `scripts/build.sh`）。
+```bash
+# 卸载 / 查看依赖树
+dsh --profile web plugin remove @stars-w/dsh-group-chat
+dsh --profile web plugin why @stars-w/dsh-group-chat
+```
+
+重启 profile 后插件自动装配生效（DSH 会加载已安装依赖中的外部插件；会话头部出现「💬 群聊」、可用 `/group-chat <任务>` 即可确认）。需要显式指定装配顺序/清单时，把包名加入 profile 的 `dsh.profile.bundles` 列表，或在 DSH 插件市场（**设置 → 插件市场**）一键安装。
+
+> **底层等价**：包以标准 npm 包发布（`npm install @stars-w/dsh-group-chat`，`lib/` 为已构建运行产物，无需构建步骤）；peer 依赖（`@deepseek-ai/dsh-llm`、`@deepseek-ai/dsh-tools`、`cordis`、`schemastery`、`@deepseek-ai/dsh-client-ui-slots`）由 DSH 宿主提供。安装在 DSH 宿主进程内（web/tui），不属于独立 npm 项目依赖。
 
 ## 使用步骤
 
