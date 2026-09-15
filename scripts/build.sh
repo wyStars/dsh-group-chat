@@ -51,7 +51,7 @@ const topLevel = ['cordis', 'cosmokit', 'schemastery', 'zod', '@standard-schema'
 for (const pkg of topLevel) {
   if (fs.existsSync(path.join(deploy, pkg))) link(path.join('node_modules', pkg), path.join(deploy, pkg))
 }
-const deepseek = ['dsh-tools', 'dsh-llm', 'dsh-system-prompt', 'dsh-client-ui-slots', 'dsh-client-runtime', 'dsh-session', 'dsh-timeout']
+const deepseek = ['dsh-tools', 'dsh-llm', 'dsh-system-prompt', 'dsh-client-ui-slots', 'dsh-client-ui-conversation', 'dsh-client-ui-layout', 'dsh-session', 'dsh-timeout']
 for (const pkg of deepseek) {
   if (fs.existsSync(path.join(deploy, '@deepseek-ai', pkg))) {
     link(path.join('node_modules', '@deepseek-ai', pkg), path.join(deploy, '@deepseek-ai', pkg))

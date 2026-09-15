@@ -36,6 +36,14 @@ dsh plugin --profile web add @stars-w/dsh-group-chat
 dsh plugin --profile tui add @stars-w/dsh-group-chat
 ```
 
+> **官方 Electron 桌面版**：桌面版独占 `desktop` profile（`dsh --profile desktop` 被
+> 桌面壳接管，CLI 不可启动它），请在**桌面版应用内**的插件管理界面安装，或让桌面版
+> 的 pnpm 事务安装到 `desktop` profile。本插件已按桌面版契约打包：`dsh.bundle.patch`
+> 指向 `cordis.patch.yml`（装即可装配 host 半）、发布产物不含嵌套 `node_modules`、
+> 第一方共享包只出现在 `peerDependencies`（桌面版 `autoInstallPeers: false` +
+> `nodeLinker: hoisted`，由宿主 junction 提供）。面板 API 走 DSH 共享 `/api` 通道，
+> **不依赖 webServer 服务**，因此桌面版默认不启用 webserver 也能工作。
+
 ```bash
 # 卸载 / 查看依赖树
 dsh plugin --profile web remove @stars-w/dsh-group-chat
@@ -46,7 +54,7 @@ dsh plugin --profile web why @stars-w/dsh-group-chat
 
 重启 profile 后插件自动装配生效（DSH 会加载已安装依赖中的外部插件；会话头部出现「💬 群聊」、可用 `/group-chat <任务>` 即可确认）。需要显式指定装配顺序/清单时，把包名加入 profile 的 `dsh.profile.bundles` 列表，或在 DSH 插件市场（**设置 → 插件市场**）一键安装。
 
-> **底层等价**：包以标准 npm 包发布（`npm install @stars-w/dsh-group-chat`，`lib/` 为已构建运行产物，无需构建步骤）；peer 依赖（`@deepseek-ai/dsh-llm`、`@deepseek-ai/dsh-tools`、`cordis`、`schemastery`、`@deepseek-ai/dsh-client-ui-slots`）由 DSH 宿主提供。安装在 DSH 宿主进程内（web/tui），不属于独立 npm 项目依赖。
+> **底层等价**：包以标准 npm 包发布（`npm install @stars-w/dsh-group-chat`，`lib/` 为已构建运行产物，无需构建步骤）；peer 依赖（`@deepseek-ai/dsh-llm`）由 DSH 宿主提供（桌面版经 profile 内 junction 共享，不重复安装）。client 半所需的 `@deepseek-ai/dsh-client-ui-slots` / `ui-conversation` / `ui-layout` 由 Web 前端模块表提供，写在 `dsh.client.inject` 中而非 peerDependencies。安装在 DSH 宿主进程内（web/tui/desktop），不属于独立 npm 项目依赖。
 
 ## 使用步骤
 
@@ -72,10 +80,10 @@ shell.overlay（右停靠/可拖动面板）           → summarizing → done�
       深度推理开关 + 主持人徽标                  summarize（隐藏上限 60 步后强制总结）
       底部参与输入框（主持人插话）              · 成员管线：plan(direct/deep) → 流式发言
       │  fetch（打开 500ms / 后台 2s 快照）      或 deep(spawn subagent maxDepth 1, 180s)
-      └──────────────▶ /dsh-group-chat/api     · 失败回退：主持 JSON 非法→least-spoken；
+      └──────────────▶ /api/group-chat         · 失败回退：主持 JSON 非法→least-spoken；
       GET  /state（快照）                       子代理失败/超时→direct 发言
-      POST /generate-roles | start | pause | resume | skip | stop | chat
-           | reroll | update-roles | sync-settings | export-md
+      POST /command { action: generate-roles | start | pause | resume | skip
+           | stop | chat | reroll | update-roles | sync-settings | export-md }
 ```
 
 - **基于会话发起**：命令 handler 取当前 agent 的 session（绑定 sessionId）；模型路由优先该会话 agent 的 `options.provider/model`，回退「默认模型选择」（deep subagent 继承同一路由）。
@@ -108,9 +116,13 @@ idle ──start()──▶ discussing ──主持人步进循环──▶ summ
 
 ## HTTP API
 
-宿主进程注册前缀路由 `/dsh-group-chat`，浏览器面板与外部脚本以**同源 fetch** 调用（请求可携带 `sessionId`，用于模型路由/导出目录解析）。
+宿主进程经 `ctx.connection.fetch.register` 在 DSH **共享 `/api` 通道**注册两条精确 Fetch 路由。
+web 版由 webserver 把 `/api` 前缀交给同一个 connection handler；官方 Electron 桌面版由
+`desktop-host` 直接转发 `/api/*`（桌面版默认禁用 webserver，自建前缀路由在桌面版下不可达，
+故本插件不再使用 `webServer.register`）。两种运行方式路径一致，浏览器面板与外部脚本以
+**同源 fetch** 调用（请求可携带 `sessionId`，用于模型路由/导出目录解析）。
 
-### GET `/api/state` —— 快照轮询
+### GET `/api/group-chat/state` —— 快照轮询
 
 | 字段 | 说明 |
 |---|---|
@@ -128,7 +140,9 @@ idle ──start()──▶ discussing ──主持人步进循环──▶ summ
 | `summary` / `error` / `mdPath` / `mdContent` | 结论 / 错误 / 最近导出路径与内容 |
 | `version` | 快照版本号（轮询去重用） |
 
-### POST `/api/<action>`
+### POST `/api/group-chat/command`
+
+请求体：`{ action, sessionId?, ...该 action 的参数 }`。
 
 | Action | 参数 | 说明 |
 |---|---|---|
@@ -175,6 +189,10 @@ npm run build:client        # 仅打包 client（tsdown → lib/client.js）
 # UI 回归（Playwright；需本地 dsh web 认证 cookie）：
 python3 test/ui-panel-smoke.py
 python3 test/ui-e2e.py
+# 面板 API 迁移回归（页面上下文同源 fetch + 面板打开）：
+DSH_WEB_TOKEN=<dsh web 启动 URL 里的 token> python3 test/api-migration-smoke.py
+# 桌面版契约离线校验（npm pack 产物 + 官方校验函数）：
+npm run check:desktop
 # 注入器环境（DSH 开发工作流）：
 dev_build_plugin . && dev_inject_plugin . && dev_reload_package dsh-group-chat
 # 发布：
@@ -187,11 +205,13 @@ npm publish --dry-run && npm publish    # 需 @stars-w scope 权限（publishCon
 ## 文件结构
 
 ```
-lib/index.js        host 入口：webServer 前缀路由 /dsh-group-chat + 动作分发 + 模型路由/导出目录解析
+lib/index.js        host 入口：/api/group-chat 精确 Fetch 路由（connection 共享通道）+ 动作分发 + 模型路由/导出目录解析
 lib/engine.js       GroupChatEngine：状态机、角色生成 {host,roles}、主持人步进循环、成员 plan/deep、总结、导出
 lib/llm.js          LLM 封装（llm.stream + BlockAssembler 聚合、JSON 容错提取）
+cordis.patch.yml    bundle 层：把本包作为 host 半 cordis 插件装配（dsh.bundle.patch 指向它）
 src/client/index.js 群聊面板 UI（入口按钮 + overlay 面板 + 轮询 + 悬浮按钮 + md 渲染）
 scripts/build.sh    构建脚本
+scripts/desktop-compat-check.mjs  桌面版契约离线等价校验（真值调用官方 validateDesktopPluginGraph）
 test/               host 单测（node:test）+ Playwright UI 回归脚本
 docs/specs/         设计规格（2026-08-28 初版 / 2026-09-05 主持人制 + 实现注记）
 docs/superpowers/plans/  实现计划（含任务勾选与验证记录）
@@ -207,7 +227,12 @@ docs/superpowers/plans/  实现计划（含任务勾选与验证记录）
 
 ## 版本兼容
 
-- DSH 宿主：`dsh-web` rc 系列（`/dsh-group-chat` 前缀路由 + `webServer`/`commands`/`agents`/`subagents` 服务）。
+- DSH 宿主：`>=0.1.5-rc <2`（peer 范围按 semver 预发布元组规则书写：`>=0.0.1-rc <2`
+  不匹配 `0.1.5-rc.2`，会直接被桌面版 `validateDesktopPluginGraph` 拒绝）。
+  面板 API 走 `connection` 共享 `/api` 通道的精确 Fetch 路由 + `commands`/`agents`/`subagents`
+  服务，**不依赖 `webServer`**——web 版与官方 Electron 桌面版（`desktop` profile）通用。
+- 桌面版契约自检：`npm run check:desktop`（默认 npm pack 产物 + 官方
+  `apps/desktop/src/profile-packages.ts` 的真实校验函数，等价于桌面版启动时的插件依赖图校验）。
 - 深层依赖（peer）：见 `peerDependencies`。Deep 推理需宿主装配 `@deepseek-ai/dsh-subagent` 与 `@deepseek-ai/dsh-subagent-spawn-in-process`（provider `spawn`）；缺失时自动回退 direct 发言。
 
 ## 非目标（YAGNI）

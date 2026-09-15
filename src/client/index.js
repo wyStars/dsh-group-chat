@@ -54,7 +54,13 @@ function closePanel() {
 
 /* ───────────────────────── Host API ───────────────────────── */
 
-const API = '/dsh-group-chat/api'
+/**
+ * 面板 API 基址：host 半注册在 connection 共享 `/api` 通道下的精确 Fetch 路由。
+ * 与运行方式无关——web 版（webserver 把 `/api` 前缀交给同一个 handler）与
+ * 桌面版（desktop-host 转发 `/api/*`）走同一条路径，因此这里不使用任何
+ * 自建前缀路由。
+ */
+const API = '/api/group-chat'
 
 async function fetchState() {
   const res = await fetch(API + '/state', { cache: 'no-store' })
@@ -63,10 +69,10 @@ async function fetchState() {
 }
 
 async function postAction(action, extra = {}) {
-  const res = await fetch(API + '/' + action, {
+  const res = await fetch(API + '/command', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId: bus.sessionId, ...extra }),
+    body: JSON.stringify({ action, sessionId: bus.sessionId, ...extra }),
   })
   const data = await res.json().catch(() => ({ ok: false }))
   if (!res.ok || data.ok !== true) {

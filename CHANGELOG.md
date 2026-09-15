@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.0.7] - 2026-09-15
+
+- **适配 DSH 0.1.5-rc.2 与官方 Electron 桌面版**
+- 面板通信通道迁移：`webServer.register('/dsh-group-chat')` 前缀路由 →
+  `ctx.connection.fetch.register` 在共享 `/api` 通道注册精确 Fetch 路由
+  （`GET /api/group-chat/state`、`POST /api/group-chat/command`，动作改由请求体
+  `action` 字段携带）。桌面版默认不装配 webserver，旧前缀路由在桌面版下不可达
+  （面板彻底失联）；迁移后 web 版与桌面版走同一条路径
+- 修复桌面版启动校验拒绝：peer 范围 `>=0.0.1-rc <2` 按 semver 预发布元组规则
+  不匹配 `0.1.5-rc.2`，改为 `>=0.1.5-rc <2`；从 peerDependencies 移除由 Web
+  前端模块表提供的 client-only 包（`@deepseek-ai/dsh-client-ui-slots`）与
+  包名不存在的 `cordis`/`schemastery`（后者正确包名是 `@deepseek-ai/schemastery`，
+  且本插件未直接使用）
+- 补齐可安装性：新增 `cordis.patch.yml` 并在 `package.json` 声明
+  `dsh.bundle.patch`——此前经 `dsh plugin add` / 桌面版插件管理安装后 host 半
+  不会被装配
+- 修正 `dsh.client.inject`：移除 0.1.5 线已不存在的 `@deepseek-ai/dsh-client-runtime`，
+  改为实际提供所用 slot 的 `@deepseek-ai/dsh-client-ui-conversation`（会话头按钮）
+  与 `ui-layout`（`shell.overlay` 面板），保留 `ui-slots`
+- 新增 `scripts/desktop-compat-check.mjs`（`npm run check:desktop`）：真值调用官方
+  `apps/desktop/src/profile-packages.ts` 的 `validateDesktopPluginGraph`，对 npm pack
+  产物做桌面版契约等价校验
+
 ## [0.0.6] - 2026-09-05
 
 - 新会话页不再显示群聊悬浮按钮：快照新增 `sessionId`（群聊归属会话），

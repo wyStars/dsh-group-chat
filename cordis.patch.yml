@@ -1,0 +1,5 @@
+# dsh-group-chat bundle 层：把本包作为 host 半 cordis 插件加载。
+# （群聊面板的 client 半由 package.json 的 dsh.client 声明。）
+- insert:
+    - id: dsh-group-chat
+      name: '@stars-w/dsh-group-chat'
