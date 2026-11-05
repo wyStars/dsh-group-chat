@@ -103,10 +103,16 @@ const CSS = `
 .dshgc-overlay[data-float='1'] { right: auto; bottom: auto; }
 .dshgc-panel {
   width: 100%; box-sizing: border-box; display: flex; flex-direction: column;
-  background: var(--dsw-specific-menu, #1c1e24); color: var(--dsw-alias-label-primary, #eee);
+  /* 不透明背景：主题菜单色是半透明填充，叠在不透明实色上，
+     避免主会话内容从面板背后透出 */
+  background: linear-gradient(var(--dsw-specific-menu, rgba(248,249,250,.58)), var(--dsw-specific-menu, rgba(248,249,250,.58))), #f7f8fa;
+  color: var(--dsw-alias-label-primary, #eee);
   border: 1px solid var(--dsw-alias-border-l2, #333); border-radius: 14px;
   box-shadow: var(--dsw-shadow-lv3, 0 8px 32px rgba(0,0,0,.4));
   overflow: hidden; font-size: 13px; line-height: 20px; min-height: 0;
+}
+body[data-ds-dark-theme] .dshgc-panel {
+  background: linear-gradient(var(--dsw-specific-menu, rgba(67,69,74,.45)), var(--dsw-specific-menu, rgba(67,69,74,.45))), #26282d;
 }
 .dshgc-head { flex: none; display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 10px 0 12px; border-bottom: 1px solid var(--dsw-alias-border-l2, #333); cursor: move; user-select: none; }
 .dshgc-head button { cursor: pointer; }
@@ -208,9 +214,11 @@ const CSS = `
   box-shadow: 0 4px 16px rgba(0,0,0,.35);
   cursor: pointer; font-family: inherit; font-size: 17px; line-height: 1;
   color: #cfd6e4;
-  opacity: .85; transition: opacity .15s, border-color .25s, color .25s, transform .15s;
+  opacity: 1; transition: opacity .15s, border-color .25s, color .25s, transform .15s;
+  touch-action: none;
 }
 .dshgc-float:hover { opacity: 1; transform: scale(1.05); background: linear-gradient(160deg, rgba(54,62,82,.98), rgba(38,44,60,.98)); }
+.dshgc-float-dragging { opacity: 1; cursor: grabbing; transform: none; z-index: 97; }
 .dshgc-float-active {
   opacity: 1; color: #6fe6b0;
   border-color: rgba(111,230,176,.65);
@@ -394,6 +402,45 @@ function savePanelPos(pos) {
   try {
     if (pos) localStorage.setItem(PANEL_POS_KEY, JSON.stringify(pos))
     else localStorage.removeItem(PANEL_POS_KEY)
+  } catch { /* 存储不可用：静默 */ }
+}
+
+/* ───────────────────────── 悬浮按钮位置（拖动 + 持久化） ───────────────────────── */
+
+const FLOAT_POS_KEY = 'dsh-group-chat-float-pos'
+/** 悬浮按钮边长（与 .dshgc-float 的 width/height 一致）。 */
+const FLOAT_SIZE = 46
+
+/**
+ * 把悬浮按钮位置限制在视口内（四周留 8px）。
+ * @param {number} x 期望的 left
+ * @param {number} y 期望的 top
+ * @returns {{x: number, y: number}} 视口内的位置
+ */
+function clampFloatPos(x, y) {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  return {
+    x: Math.max(8, Math.min(Math.round(x), vw - FLOAT_SIZE - 8)),
+    y: Math.max(8, Math.min(Math.round(y), vh - FLOAT_SIZE - 8)),
+  }
+}
+
+/** 读取用户拖动的悬浮按钮位置；未拖动过返回 null（走默认自适应位置）。 */
+function loadFloatPos() {
+  try {
+    const raw = localStorage.getItem(FLOAT_POS_KEY)
+    if (!raw) return null
+    const p = JSON.parse(raw)
+    if (typeof p.x === 'number' && typeof p.y === 'number') return clampFloatPos(p.x, p.y)
+  } catch { /* 忽略损坏数据 */ }
+  return null
+}
+
+function saveFloatPos(pos) {
+  try {
+    if (pos) localStorage.setItem(FLOAT_POS_KEY, JSON.stringify(pos))
+    else localStorage.removeItem(FLOAT_POS_KEY)
   } catch { /* 存储不可用：静默 */ }
 }
 
@@ -774,15 +821,16 @@ function roleName(snap, roleId) {
 /* ───────────────────────── 收起态悬浮按钮 ───────────────────────── */
 
 /**
- * 面板收起时的左上方悬浮入口：按讨论状态切换样式（待命/讨论中动画/出错）。
+ * 面板收起时的悬浮入口：按讨论状态切换样式（待命/讨论中动画/出错）。
+ * 可拖动调整位置（拖动后位置持久化；未拖动时贴会话内容区左上角），点击展开面板。
  * snap 由 OverlayHost 的低频轮询提供（面板关闭时 2s 一次）。
  */
 function FloatingButton({ currentSession, snap }) {
   const phase = snap ? snap.phase : 'idle'
   const active = phase === 'discussing' || phase === 'generating-roles' || phase === 'summarizing'
   const cls = 'dshgc-float' + (active ? ' dshgc-float-active' : '') + (phase === 'error' ? ' dshgc-float-error' : '')
-  const label = (snap && snap.task ? snap.task.slice(0, 18) + ' · ' : '') + (PHASE_LABEL[phase] || phase) + ' — 点击展开群聊面板'
-  // 位置：主会话内容区左上角（会话侧栏右侧）；实测侧栏宽，CSS 292px 兜底
+  const label = (snap && snap.task ? snap.task.slice(0, 18) + ' · ' : '') + (PHASE_LABEL[phase] || phase) + ' — 点击展开群聊面板（可拖动移动位置）'
+  // 未拖动时的默认位置：主会话内容区左上角（会话侧栏右侧）；实测侧栏宽，CSS 292px 兜底
   const [sideW, setSideW] = useState(280)
   useEffect(() => {
     const el = document.querySelector('[class*="sidebarCol"]') || document.querySelector('aside')
@@ -791,12 +839,63 @@ function FloatingButton({ currentSession, snap }) {
       if (r.width > 100) setSideW(Math.round(r.width))
     }
   }, [])
+  const [pos, setPos] = useState(() => loadFloatPos())
+  const [dragging, setDragging] = useState(false)
+  const movedRef = useRef(false)
+  const cleanupRef = useRef(null)
+  // 窗口尺寸变化：已拖动过的位置重新夹到视口内，避免按钮跑到屏幕外
+  useEffect(() => {
+    if (!pos) return
+    const onResize = () => setPos((p) => (p ? clampFloatPos(p.x, p.y) : p))
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [pos])
+  // 卸载时移除可能残留的拖动监听
+  useEffect(() => () => { cleanupRef.current?.() }, [])
+
+  const onPointerDown = (e) => {
+    if (e.button !== undefined && e.button !== 0) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const start = { x: e.clientX, y: e.clientY, left: rect.left, top: rect.top }
+    let latest = null
+    movedRef.current = false
+    setDragging(true)
+    const onMove = (ev) => {
+      const dx = ev.clientX - start.x
+      const dy = ev.clientY - start.y
+      if (!movedRef.current && Math.hypot(dx, dy) < 4) return
+      movedRef.current = true
+      latest = clampFloatPos(start.left + dx, start.top + dy)
+      setPos(latest)
+    }
+    const finish = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+      cleanupRef.current = null
+      setDragging(false)
+      if (latest) saveFloatPos(latest)
+      // click 紧跟在 pointerup 之后派发：先让 click 消费 movedRef，再复位
+      setTimeout(() => { movedRef.current = false }, 0)
+    }
+    cleanupRef.current = finish
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+  }
+
+  const onClick = () => {
+    if (movedRef.current) return // 拖动结束的那次 click 不展开面板
+    openPanel(currentSession)
+  }
+
   return h('button', {
-    className: cls,
+    className: cls + (dragging ? ' dshgc-float-dragging' : ''),
     title: label,
     'aria-label': label,
-    style: { left: sideW + 12 },
-    onClick: () => openPanel(currentSession),
+    style: pos ? { left: pos.x, top: pos.y } : { left: sideW + 12 },
+    onPointerDown,
+    onClick,
   }, '💬', active ? h('span', { className: 'dshgc-float-dots' }, h('i'), h('i'), h('i')) : null)
 }
 
@@ -851,7 +950,7 @@ function OverlayHost({ useSessions }) {
       const s = closedSnap
       const hasContext = Boolean(s && (s.phase !== 'idle' || (s.task && s.task !== '')))
       if (!hasContext) return null // 新会话/空闲：不显示悬浮按钮
-      if (s && s.sessionId !== '' && s.sessionId !== currentSession) return null // 任务属于其它会话
+      if (s && s.sessionId !== '' && currentSession !== undefined && s.sessionId !== currentSession) return null // 任务属于其它会话
     }
     return h(FloatingButton, { currentSession, snap: closedSnap })
   }
