@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.9] - 2026-11-05
+
+- **修复 DSH 0.2.x 下群聊面板不显示**：0.2.x 的 `SessionListState` 从 0.1.x 的
+  `{ current, byId, … }` 改成 `{ ids, byId, phase, projectionsBySession }`，面板的
+  会话归属判断（`state.current`）永远读到 `undefined`，随后 `return null` 把整个
+  面板与收起浮钮藏掉。归属判断改为：有当前会话 id 时仍按发起会话过滤，读不到时
+  以 `bus.sessionId` / 快照里的发起会话为准，不再隐藏；后台轮询也不再因
+  `currentSession` 未知而跳过，命令触发后能自动打开面板
+- 客户端产物 `lib/client.js` 随 `src/client/index.js` 重建（tsdown）
+
 ## [0.0.8] - 2026-11-05
 
 - **修复 DSH 0.2.x 会话格式 v4 下 `/group-chat` 锁死会话**（issue #1）：讨论完成回注

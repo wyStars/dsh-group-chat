@@ -806,17 +806,21 @@ function OverlayHost({ useSessions }) {
   const [tick, setTick] = useState(0)
   useEffect(() => subscribeBus(() => setTick((n) => n + 1)), [])
 
-  // 当前活跃会话（SessionListState.current）
+  // 当前活跃会话 id。DSH 0.1.x 的 SessionListState 带 `current` 字段；0.2.x 改成
+  // { ids, byId, phase, projectionsBySession }，这里只能读到 undefined——归属判断
+  // 必须允许"读不到当前会话"，否则面板会被整体藏掉。
   const currentSession = typeof useSessions === 'function'
     ? useSessions((s) => (s ? s.current : undefined))
     : undefined
 
   // 面板关闭时的低频轮询（2s）：
   //  1) 浮钮展示 phase 状态（讨论中动画/出错色/待命）
-  //  2) 检测到新群聊活动（未收起的新任务、且属于当前浏览的会话）→ 自动打开面板
+  //  2) 检测到新群聊活动（未收起的新任务）→ 自动打开面板
+  // 归属优先用 bus.sessionId（点击/自动打开时记录），其次用快照里的发起会话；
+  // 读不到当前会话（0.2.x）时不因此跳过探测，否则面板永远不自动打开。
   const [closedSnap, setClosedSnap] = useState(null)
   useEffect(() => {
-    if (!currentSession || bus.open) return
+    if (bus.open) return
     let alive = true
     const probe = async () => {
       try {
@@ -826,8 +830,9 @@ function OverlayHost({ useSessions }) {
         const active = s.phase === 'discussing' || s.phase === 'generating-roles' || s.phase === 'summarizing'
         if (!active) return
         if (s.task === bus.dismissedTask) return // 用户已收起同一任务：静默后台跑
-        if (bus.sessionId !== '' && bus.sessionId !== currentSession) return // 群聊属于其它会话
-        openPanel(currentSession)
+        const owner = bus.sessionId !== '' ? bus.sessionId : s.sessionId
+        if (owner && currentSession !== undefined && owner !== currentSession) return // 群聊属于其它会话
+        openPanel(owner)
       } catch { /* host 不可达：静默 */ }
     }
     probe()
@@ -839,8 +844,8 @@ function OverlayHost({ useSessions }) {
   // 收起态：仅当群聊上下文存在且属于当前会话时显示左上方悬浮按钮
   if (!bus.open) {
     if (bus.sessionId !== '') {
-      // 已绑定过群聊会话：只在那个会话显示
-      if (currentSession !== bus.sessionId) return null
+      // 已绑定过群聊会话：只在那个会话显示；读不到当前会话（0.2.x）时不隐藏
+      if (currentSession !== undefined && currentSession !== bus.sessionId) return null
     } else {
       // 未绑定：仅当引擎有群聊上下文（活动/任务），且任务归属于当前会话
       const s = closedSnap
@@ -851,8 +856,8 @@ function OverlayHost({ useSessions }) {
     return h(FloatingButton, { currentSession, snap: closedSnap })
   }
   // 会话绑定：面板只属于发起会话（bus.sessionId）；切走即不显示，切回恢复。
-  // 用户未绑定（从未打开/命令触发）时以当前会话为准。
-  if (bus.sessionId !== '' && currentSession !== bus.sessionId) return null
+  // 读不到当前会话（0.2.x）时以 bus.sessionId 为准，不做隐藏。
+  if (bus.sessionId !== '' && currentSession !== undefined && currentSession !== bus.sessionId) return null
   return h(Panel, null)
 }
 
