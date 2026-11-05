@@ -4,6 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
 import { makeLlm, makeSubagents, makeEngine, defaultHandlers, waitIdle, stepScript } from './helpers.mjs'
 
 async function setup(overrides = {}) {
@@ -121,7 +122,7 @@ test('moderator: 隐藏上限（GC_MAX_MODERATOR_TURNS=2）→ 强制总结', as
   // 本测试在独立子进程跑（上限环境变量在模块加载时读取）
   const { spawnSync } = await import('node:child_process')
   const res = spawnSync(process.execPath, ['--test', 'max-turns.case.mjs'], {
-    cwd: new URL('.', import.meta.url).pathname,
+    cwd: fileURLToPath(new URL('.', import.meta.url)),
     env: { ...process.env, GC_MAX_MODERATOR_TURNS: '2' },
     encoding: 'utf8',
   })

@@ -4,6 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
 import { makeLlm, makeSubagents, makeEngine, defaultHandlers, waitIdle, waitFor, stepScript } from './helpers.mjs'
 
 async function setup(overrides = {}, subagentOpts = {}) {
@@ -178,7 +179,7 @@ test('deep 中 stop → abort subagent, phase=done 无残留状态', async () =>
 test('deep 超时（GC_DEEP_TIMEOUT_MS=100）→ 回退 direct（独立子进程）', async () => {
   const { spawnSync } = await import('node:child_process')
   const res = spawnSync(process.execPath, ['--test', 'deep-timeout.case.mjs'], {
-    cwd: new URL('.', import.meta.url).pathname,
+    cwd: fileURLToPath(new URL('.', import.meta.url)),
     env: { ...process.env, GC_DEEP_TIMEOUT_MS: '100' },
     encoding: 'utf8',
   })

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.0.8] - 2026-11-05
+
+- **修复 DSH 0.2.x 会话格式 v4 下 `/group-chat` 锁死会话**（issue #1）：讨论完成回注
+  主会话的 user 消息仍用 v3 的 `{ kind: 'plugin', plugin: 'dsh-group-chat' }` 来源，v4
+  持久化校验直接拒绝（`format v4 message requires a producer-owned source kind`），
+  会话随之不可再发送消息。新增 `lib/message-source.js`：按目标会话 `header.version`
+  选择来源形态——v3 保留 `plugin` 包装，v4 用生产者自持的 `plugin:dsh-group-chat`
+  （迁移规范约定的第三方插件 kind）；`form: 'notice'` / `summary` 保持不变，回注消息
+  仍以通知行呈现
+- 新增 `engines.dsh: ">=0.1.5-rc <2"`：桌面版插件兼容校验按宿主版本声明，覆盖
+  `0.1.5-rc` 与 `0.2.x` 预发布（含 `0.2.1-rc.*`）
+- 新增 `test/host/message-source.test.mjs`：v3 / v4 来源形态与版本回落单测
+- 修复单测在 Windows 下误败：两处独立子进程用例的 `cwd` 由 URL pathname
+  （`/D:/...`）改为 `fileURLToPath`，`npm test` 在 Windows 可直接跑通
+
 ## [0.0.7] - 2026-09-15
 
 - **适配 DSH 0.1.5-rc.2 与官方 Electron 桌面版**

@@ -206,6 +206,7 @@ npm publish --dry-run && npm publish    # 需 @stars-w scope 权限（publishCon
 
 ```
 lib/index.js        host 入口：/api/group-chat 精确 Fetch 路由（connection 共享通道）+ 动作分发 + 模型路由/导出目录解析
+lib/message-source.js  回注主会话的消息来源构造（按会话格式 v3/v4 切换）
 lib/engine.js       GroupChatEngine：状态机、角色生成 {host,roles}、主持人步进循环、成员 plan/deep、总结、导出
 lib/llm.js          LLM 封装（llm.stream + BlockAssembler 聚合、JSON 容错提取）
 cordis.patch.yml    bundle 层：把本包作为 host 半 cordis 插件装配（dsh.bundle.patch 指向它）
@@ -227,10 +228,15 @@ docs/superpowers/plans/  实现计划（含任务勾选与验证记录）
 
 ## 版本兼容
 
-- DSH 宿主：`>=0.1.5-rc <2`（peer 范围按 semver 预发布元组规则书写：`>=0.0.1-rc <2`
-  不匹配 `0.1.5-rc.2`，会直接被桌面版 `validateDesktopPluginGraph` 拒绝）。
+- DSH 宿主：`>=0.1.5-rc <2`（`engines.dsh` 与 `peerDependencies` 同范围；桌面版
+  `validateDesktopPluginGraph` 以「宿主版本 + 预发布参与比较」判定，`0.1.5-rc`、`0.2.x`
+  均在范围内）。
   面板 API 走 `connection` 共享 `/api` 通道的精确 Fetch 路由 + `commands`/`agents`/`subagents`
   服务，**不依赖 `webServer`**——web 版与官方 Electron 桌面版（`desktop` profile）通用。
+- 会话消息格式：DSH 0.1.x 写会话格式 v3，0.2.x 起写 v4。插件回注主会话的「讨论已完成」
+  消息按目标会话 `header.version` 自动切换来源形态——v3 用 `{ kind: 'plugin', plugin }`，
+  v4 用 `{ kind: 'plugin:dsh-group-chat' }`（v4 拒绝退役的 `plugin` 包装，写错会让持久化
+  校验抛 `format v4 message requires a producer-owned source kind`）。
 - 桌面版契约自检：`npm run check:desktop`（默认 npm pack 产物 + 官方
   `apps/desktop/src/profile-packages.ts` 的真实校验函数，等价于桌面版启动时的插件依赖图校验）。
 - 深层依赖（peer）：见 `peerDependencies`。Deep 推理需宿主装配 `@deepseek-ai/dsh-subagent` 与 `@deepseek-ai/dsh-subagent-spawn-in-process`（provider `spawn`）；缺失时自动回退 direct 发言。
