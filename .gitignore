@@ -1,3 +1,6 @@
 node_modules/
 *.tsbuildinfo
 *.tgz
+
+# 群聊导出的讨论纪要（运行时产物，不纳入版本库）
+group-chat-*.md
